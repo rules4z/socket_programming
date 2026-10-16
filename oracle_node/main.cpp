@@ -3,6 +3,12 @@
 #include <sstream>
 #include <string>
 #include <vector>
+
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <unistd.h>
+#include <cstring>
 using namespace std;
 
 int main(int argc, char* argv[]) {
@@ -62,5 +68,25 @@ int main(int argc, char* argv[]) {
             graph[v][u]=cost;
         }
     }
+
+
+    //construction of socket
+    int server_fd=socket(AF_INET, SOCK_STREAM, 0);
+    if (server_fd == -1) {
+        cerr<<"Failed to create socket\n";
+        return 1;
+    }
+    struct sockaddr_in server_addr{};
+    server_addr.sin_family=AF_INET;
+    server_addr.sin_port=htons(5000);
+    server_addr.sin_addr.s_addr=htonl(INADDR_ANY);
+    //assuming we need extensive checking for error
+    if (bind(server_fd,(struct sockaddr*)&server_addr,sizeof(server_addr))==-1) {
+        cerr<<"Failed to bind to port 5000\n";
+        close(server_fd);
+        return 1;
+    }
+    //now supposedly bound to port 5000
+    cout<<"bound to port 5000"<<endl;
     return 0;
 }
