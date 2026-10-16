@@ -88,5 +88,25 @@ int main(int argc, char* argv[]) {
     }
     //now supposedly bound to port 5000
     cout<<"bound to port 5000"<<endl;
+
+    if (listen(server_fd,SOMAXCONN)<0) {
+        cerr<<"Failed to listen\n";
+        return 1;
+    }
+    cout<<"Oracle Node is listening on port 5000\n";
+
+    //test with one node
+    struct sockaddr_in client_addr{};
+    socklen_t client_len = sizeof(client_addr);
+    int client_fd = accept(
+        server_fd,
+        (struct sockaddr*)&client_addr,
+        &client_len
+    );
+    if (client_fd < 0) {
+        cerr << "Failed to accept connection\n";
+        return 1;
+    }
+    cout << "A Virtual Node connected\n";
     return 0;
 }
