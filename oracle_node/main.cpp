@@ -19,7 +19,7 @@ struct NodeInfo {
     uint16_t udp_port; //since udp 2 bytes
 };
 
-//to make sure tcp sends all the required bytes
+//to make sure server gets all the required bytes
 bool recv_all(int fd, char* buffer, size_t length) {
     size_t received = 0;
     while (received<length) {
@@ -28,6 +28,19 @@ bool recv_all(int fd, char* buffer, size_t length) {
             return false;
         }
         received+=bytes;
+    }
+    return true;
+}
+
+//to make sure server sends all the required bytes
+bool send_all(int fd, const char* buffer, size_t length) {
+    size_t sent = 0;
+    while (sent<length) {
+        ssize_t bytes=send(fd,buffer+sent,length-sent,0);
+        if (bytes<=0) {
+            return false;
+        }
+        sent += bytes;
     }
     return true;
 }
@@ -58,6 +71,10 @@ int main(int argc, char* argv[]) {
         if (!row.empty()) {
             rows.push_back(row);
         }
+    }
+    if (rows.empty()) {
+        cerr<<"Configuration file is empty: no network defined\n";
+        return 1;
     }
     int n=rows.size()+1;
     if (n>26) {
@@ -145,6 +162,38 @@ int main(int argc, char* argv[]) {
         nodes.push_back(node);
     }
     cout << "Received CONNECT messages from all configured nodes\n";
+
+    for (int i = 0; i < n; i++) {
+        vector<char> message(2, 0);
+        uint16_t tuple_count = 0;
+        for (int j = 0; j < n; j++) {
+            if (i != j && graph[i][j] <= 0) {
+                continue;
+            }
+            message.push_back(static_cast<char>('A' + j));
+            const char* ip_bytes =reinterpret_cast<const char*>(&nodes[j].ip.s_addr);
+            message.insert(message.end(), ip_bytes, ip_bytes + 4);
+            uint16_t port_network = htons(nodes[j].udp_port);
+            const char* port_bytes =reinterpret_cast<const char*>(&port_network);
+            message.insert(message.end(), port_bytes, port_bytes + 2);
+            uint32_t cost = (i == j)? 0: static_cast<uint32_t>(graph[i][j]);
+            uint32_t cost_network = htonl(cost);
+            const char* cost_bytes =reinterpret_cast<const char*>(&cost_network);
+            message.insert(message.end(), cost_bytes, cost_bytes + 4);
+            tuple_count++;
+        }
+        uint16_t count_network = htons(tuple_count);
+        memcpy(message.data(), &count_network, sizeof(count_network));
+        if (!send_all(nodes[i].client_fd,message.data(),message.size())) {
+            cerr << "Failed to send LINK-STATE to node "<< static_cast<char>('A' + i) << '\n';
+            close(nodes[i].client_fd);
+            nodes[i].client_fd = -1;
+            continue;
+        }
+        cout << "Sent LINK-STATE to node "<< static_cast<char>('A' + i)<< " with " << tuple_count << " tuples\n";
+    }
+
+    cout << "Finished sending LINK-STATE messages\n";
 
     return 0;
 }
