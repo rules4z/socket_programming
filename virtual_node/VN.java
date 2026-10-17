@@ -34,9 +34,28 @@ public class VN{
                 out.flush();
                 System.out.println("Sent CONNECT to Oracle Node");
                 int tupleCount = in.readUnsignedShort();
-                System.out.println("Received LINK-STATE with " + tupleCount + " tuples");
+                System.out.println("Received LINK-STATE with "+tupleCount+" tuples");
                 StringBuilder neighbourhood = new StringBuilder();
+                for (int i = 0; i < tupleCount; i++) {
+                    char nodeId = (char) in.readUnsignedByte();
+                    byte[] addressBytes = new byte[4];
+                    in.readFully(addressBytes);
+                    String ip = InetAddress.getByAddress(addressBytes)
+                                           .getHostAddress();
+                    int port = in.readUnsignedShort();
+                    long cost = Integer.toUnsignedLong(in.readInt());
+                    if (i > 0) {
+                        neighbourhood.append(", ");
+                    }
+                    neighbourhood.append(nodeId).append("=").append(cost);
+                    System.out.println("  Node " + nodeId+ ": IP=" + ip+ ", UDP port=" + port + ", cost=" + cost);
+                }
+                System.out.println("Neighbourhood: " + neighbourhood);
+            }catch (Exception e) {
+                System.err.println("VN error: " + e.getMessage());
+                System.exit(1);
             }
+
         }
     }
 }
