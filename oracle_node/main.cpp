@@ -8,8 +8,29 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <unistd.h>
+#include <cstdint>
 #include <cstring>
 using namespace std;
+
+//vn info
+struct NodeInfo {
+    int client_fd;
+    in_addr ip;
+    uint16_t udp_port; //since udp 2 bytes
+};
+
+//to make sure tcp sends all the required bytes
+bool recv_all(int fd, char* buffer, size_t length) {
+    size_t received = 0;
+    while (received<length) {
+        ssize_t bytes = recv(fd,buffer+received,length-received,0);
+        if (bytes<=0) {
+            return false;
+        }
+        received+=bytes;
+    }
+    return true;
+}
 
 int main(int argc, char* argv[]) {
     if (argc != 2) {
@@ -95,18 +116,35 @@ int main(int argc, char* argv[]) {
     }
     cout<<"Oracle Node is listening on port 5000\n";
 
-    //test with one node
-    struct sockaddr_in client_addr{};
-    socklen_t client_len = sizeof(client_addr);
-    int client_fd = accept(
-        server_fd,
-        (struct sockaddr*)&client_addr,
-        &client_len
-    );
-    if (client_fd < 0) {
-        cerr << "Failed to accept connection\n";
-        return 1;
+    //test with more nodes
+    vector<NodeInfo> nodes;
+    while (nodes.size()<n) {
+        struct sockaddr_in client_addr{};
+        socklen_t client_len = sizeof(client_addr);
+        int client_fd = accept(server_fd,(struct sockaddr*)&client_addr,&client_len);
+        if (client_fd < 0) {
+            cerr << "Failed to accept connection\n";
+            continue;
+        }
+        char buffer[6];
+        if (!recv_all(client_fd, buffer, sizeof(buffer))) {
+            cerr << "Failed to receive CONNECT message\n";
+            close(client_fd);
+            continue;
+        }
+        NodeInfo node{};
+        node.client_fd = client_fd;
+        memcpy(&node.ip.s_addr, buffer, 4);
+        uint16_t port_network;
+        memcpy(&port_network, buffer + 4, 2);
+        node.udp_port = ntohs(port_network);
+        char node_id = 'A' + nodes.size();
+        char ip_text[INET_ADDRSTRLEN];
+        inet_ntop(AF_INET, &node.ip, ip_text, sizeof(ip_text));
+        cout << "Received CONNECT from node " << node_id<< ": IP = " << ip_text << ", UDP port = " << node.udp_port << '\n';
+        nodes.push_back(node);
     }
-    cout << "A Virtual Node connected\n";
+    cout << "Received CONNECT messages from all configured nodes\n";
+
     return 0;
 }
